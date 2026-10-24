@@ -180,7 +180,7 @@ async def tool_read_file(path):
 async def tool_extract_csv(text: str, columns: list) -> list:
     import urllib.request, json, re
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+    model = os.environ.get("OLLAMA_MODEL", "mistral-nemo")
     prompt = (
         f"Você é um extrator de dados. A partir do texto abaixo, extraia uma lista de itens.\n"
         f"Colunas (exatamente): {', '.join(columns)}\n"
@@ -213,7 +213,7 @@ async def tool_write_csv(path: str, rows: list) -> str:
 async def tool_summarize(text: str, bullets: int = 3) -> str:
     import urllib.request, json
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+    model = os.environ.get("OLLAMA_MODEL", "mistral-nemo")
     prompt = f"Resuma em {bullets} bullet points o seguinte texto:\n\n{text[:4000]}"
     data = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
     req = urllib.request.Request(f"{ollama_url}/api/generate", data=data, headers={"Content-Type": "application/json"})
@@ -313,7 +313,7 @@ def plan(prompt: str, tools=None, allowed_override=None) -> List[Dict[str, Any]]
     # Chama Ollama local...
     import urllib.request
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+    model = os.environ.get("OLLAMA_MODEL", "mistral-nemo")
     tool_list = ", ".join(TOOLS.keys())
     system = ("""Voce é um planejador de tarefas. Dado um prompt, você deve gerar um plano de execução em formato JSON. 
         Antes de gerar o plano, você deve analisar o prompt e decidir quais ferramentas são necessárias para executar as tarefas.
