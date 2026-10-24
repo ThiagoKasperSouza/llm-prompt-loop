@@ -13,7 +13,7 @@ from typing import List, Dict, Any
 from guardrails import check_input, sanitize_output
 
 PROMPTS: List[str] = [
-  ["Resuma em 3 bullets o que é o LLMCompiler.Salve em markdown em ./bullets.md", ["tavily_search", "summarize", "write_file", "run_command"]],
+  ["Pesquise sobre o LLMCompiler.Salve em markdown em ./bullets.md", ["tavily_search", "summarize", "write_file", "run_command"]],
   ["Pesquise sobre iot em 10 fontes. Salve titulo,link e resumo em ./iot.csv", ["tavily_search", "extract_csv","write_csv", "run_command"]],
   ["Liste as pastas em /home/thiago/Documents", ["list_dir", "run_command"]],
   ["Salve o resultado de ls -la /home/thiago/Documents em ./output.txt", ["write_file", "run_command"]]
@@ -71,6 +71,14 @@ async def mcp_stdio_call(cmd: list, tool_name: str, arguments: dict, timeout: in
         return f"mcp error: {e}"
     finally:
         proc.kill()
+def guardrail_query(q: str) -> bool:
+    import re
+    patterns = [r"ignore (previous|all) instructions", r"system:", r"<\|", r"\{\{", r"jailbreak"]
+    for pat in patterns:
+        if re.search(pat, q, re.I):
+            return False
+    return True
+
 async def tool_tavily_search(query: str) -> str:
     from tavily import TavilyClient
     api_key = os.environ.get("TAVILY_API_KEY", "")
@@ -244,6 +252,9 @@ def plan(prompt: str, tools=None, allowed_override=None) -> List[Dict[str, Any]]
         tools = {k: v for k, v in tools.items() if k in set(allowed_override)}
     low = prompt.lower()
     # Least privilege
+    # Guardrail: bloquear queries suspeitas
+    if not guardrail_query(prompt):
+        return [{"id": 1, "tool": "tavily_search", "args": {"query": "blocked"}, "deps": []}]
     # Detectar "salve ... em csv" com Colunas:
     if "csv" in low:
         import re
@@ -288,6 +299,8 @@ def plan(prompt: str, tools=None, allowed_override=None) -> List[Dict[str, Any]]
         # Limpar a query de busca: remover instruções de resumo
         import re
         q = re.sub(r"resuma em \d+ bullets?\s*", "", prompt, flags=re.I).strip()
+        # Remover também instruções de salvamento
+        q = re.sub(r"\.?\s*Salve.*", "", q, flags=re.I).strip()
         if not q:
             q = prompt
         return [
