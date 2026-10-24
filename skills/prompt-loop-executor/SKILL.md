@@ -20,7 +20,7 @@ description: Use when running a deterministic loop over a list of prompts with L
 - Limitar tamanho (4000 in / 20000 out).
 
 ## MCPs
-- exa, context7, desktop-commander (ver `mcp_config.json`).
+- tavily, context7, python-mcp(ver `mcp_config.json`).
 
 ## Skills
 - `skills/` contém skills reutilizáveis.

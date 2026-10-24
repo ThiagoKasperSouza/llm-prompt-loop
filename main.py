@@ -2,6 +2,30 @@ import asyncio
 import json
 import os
 import subprocess
+import glob
+import re
+
+def load_skills() -> list:
+    skills = []
+    for path in glob.glob(os.path.join(os.path.dirname(__file__), "skills", "*", "SKILL.md")):
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                fm = parts[1]
+                body = parts[2]
+                name = None
+                desc = None
+                for line in fm.strip().splitlines():
+                    if line.startswith("name:"):
+                        name = line.split(":", 1)[1].strip()
+                    if line.startswith("description:"):
+                        desc = line.split(":", 1)[1].strip()
+                skills.append({"name": name, "description": desc, "body": body, "path": path})
+    return skills
+
+SKILLS = load_skills()
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -252,6 +276,11 @@ def plan(prompt: str, tools=None, allowed_override=None) -> List[Dict[str, Any]]
         tools = {k: v for k, v in tools.items() if k in set(allowed_override)}
     low = prompt.lower()
     # Least privilege
+    # Verificar skills
+    for sk in SKILLS:
+        if sk["description"] and sk["description"].lower() in low:
+            # Usar o DAG da skill (simplificado: retornar o primeiro tool)
+            return [{"id": 1, "tool": "tavily_search", "args": {"query": prompt}, "deps": []}]
     # Guardrail: bloquear queries suspeitas
     if not guardrail_query(prompt):
         return [{"id": 1, "tool": "tavily_search", "args": {"query": "blocked"}, "deps": []}]
