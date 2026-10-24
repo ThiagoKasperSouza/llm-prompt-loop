@@ -13,6 +13,8 @@ def handle(req):
         return None
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": req.get("id"), "result": {"tools": [
+            {"name": "run_pipeline", "description": "Run a prompt through the LLMCompiler pipeline (plan + execute DAG)",
+             "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string"}, "allowed_tools": {"type": "array", "items": {"type": "string"}}}, "required": ["prompt"]}},
             {"name": "run_command", "description": "Run a shell command",
              "inputSchema": {"type": "object", "properties": {"command": {"type": "string"}, "timeout_ms": {"type": "number"}}, "required": ["command"]}},
             {"name": "write_file", "description": "Write text to a file",
@@ -26,6 +28,15 @@ def handle(req):
         name = req["params"]["name"]
         args = req["params"].get("arguments", {})
         try:
+            if name == "run_pipeline":
+                import asyncio, sys
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from main import plan, execute_dag
+                prompt = args["prompt"]
+                allowed = args.get("allowed_tools")
+                tasks = plan(prompt, None, allowed)
+                result = asyncio.run(execute_dag(tasks, prompt))
+                return {"jsonrpc": "2.0", "id": req.get("id"), "result": {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}}
             if name == "run_command":
                 cmd = args["command"]
                 timeout = args.get("timeout_ms", 30000) / 1000.0

@@ -285,8 +285,13 @@ def plan(prompt: str, tools=None, allowed_override=None) -> List[Dict[str, Any]]
         ]
     # Detectar "resuma em bullets"
     if "resum" in low or "bullet" in low:
+        # Limpar a query de busca: remover instruções de resumo
+        import re
+        q = re.sub(r"resuma em \d+ bullets?\s*", "", prompt, flags=re.I).strip()
+        if not q:
+            q = prompt
         return [
-            {"id": 1, "tool": "tavily_search", "args": {"query": prompt}, "deps": []},
+            {"id": 1, "tool": "tavily_search", "args": {"query": q}, "deps": []},
             {"id": 2, "tool": "summarize", "args": {"text": None, "bullets": 3}, "deps": [1]},
         ]
     cmd_match = re.search(r"(ls\s+-la\s+[\w./-]+)", prompt)

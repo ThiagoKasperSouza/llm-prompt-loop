@@ -1,5 +1,6 @@
-[
-  "Resuma em 3 bullets o que é o LangChain LLMCompiler.",
-  "Liste 3 casos de uso para a tool context7.",
-  "Explique como o desktop-commander pode ajudar em automação de filesystem."
-]
+  [
+    ["Resuma em 3 bullets o que é o LLMCompiler.Salve em markdown em ./bullets.md", ["tavily_search", "summarize", "write_file", "run_command"]],
+    ["Pesquise sobre iot em 10 fontes. Salve titulo,link e resumo em ./iot.csv", ["tavily_search", "extract_csv","write_csv", "run_command"]],
+    ["Liste as pastas em /home/thiago/Documents", ["list_dir", "run_command"]],
+    ["Salve o resultado de ls -la /home/thiago/Documents em ./output.txt", ["write_file", "run_command"]]
+  ]
