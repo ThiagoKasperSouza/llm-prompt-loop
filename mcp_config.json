@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "env": {}
+    },
+    "exa": {
+      "type": "streamable-http",
+      "url": "https://mcp.exa.ai/mcp"
+    },
+    "python-tools": {
+      "command": "python3",
+      "args": ["/home/thiago/Documents/llmcompiler-prompt-loop/mcp_server.py"],
+      "env": {}
+    }
+  }
+}
