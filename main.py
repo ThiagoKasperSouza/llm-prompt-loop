@@ -212,7 +212,7 @@ async def tool_read_file(path):
 async def tool_extract_csv(text: str, columns: list) -> list:
     import urllib.request, json, re
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    model = os.environ.get("OLLAMA_MODEL", "mistral-nemo")
+    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
     prompt = (
         f"Você é um extrator de dados. A partir do texto abaixo, extraia uma lista de itens.\n"
         f"Colunas (exatamente): {', '.join(columns)}\n"
@@ -242,10 +242,94 @@ async def tool_write_csv(path: str, rows: list) -> str:
     from src.tools import mcp_stdio_call
     return await mcp_stdio_call(MCP_PY, "write_file", {"path": path, "content": buf.getvalue()})
 
+async def tool_write_multiple_files(files: dict, base_dir: str = '') -> str:
+    import os
+    results = []
+    for path, content in files.items():
+        if base_dir and not os.path.isabs(path):
+            path = os.path.join(base_dir, path)
+        parent = os.path.dirname(path)
+        # Se o parent é um arquivo, removê-lo e criar diretório
+        if parent and os.path.isfile(parent):
+            os.remove(parent)
+        if parent and not os.path.exists(parent):
+            os.makedirs(parent, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        results.append(f"written: {path}")
+    return "\n".join(results)
+
+async def tool_generate_code(prompt: str, path: str = None) -> str:
+    import urllib.request, json, os, re
+    ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+    full_prompt = (
+        f"Você é um arquiteto de software. Gere um projeto completo para: {prompt}\n\n"
+        f"Infira a arquitetura adequada (DDD, MVC, Clean Architecture, etc.) baseada no prompt inferido pelo usuário.\n"
+        f"Planeje os arquivos separados necessários (main, handlers, domain, tests, config).\n"
+        f"Em caso de dúvida, durante o raciocinio apenas, pesquise sobre a arquitetura usando a tool tavily_search"
+        f"Retorne APENAS um JSON válido, sem markdown, sem code fence, no formato:\n"
+        f'{{"files": {{"caminho/arquivo.ext": "conteúdo", "outro.ext": "conteúdo"}}}}\n'
+        f"Certifique-se de que o JSON é válido e completo."
+    )
+    data = json.dumps({"model": model, "prompt": full_prompt, "stream": False}).encode()
+    req = urllib.request.Request(f"{ollama_url}/api/generate", data=data, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=600) as r:
+        resp = json.loads(r.read())["response"]
+    m = re.search(r"\{.*\}", resp, re.S)
+    if m:
+        try:
+            obj = json.loads(m.group(0))
+            files = obj.get("files", {})
+            if files:
+                # Revisar cada arquivo
+                reviewed = {}
+                for path, content in files.items():
+                    ext = path.split(".")[-1] if "." in path else "python"
+                    lang_map = {"go": "go", "py": "python", "rs": "rust", "js": "javascript", "ts": "typescript", "java": "java"}
+                    lang = lang_map.get(ext, "python")
+                    reviewed[path] = await tool_review_code(content, language=lang)
+                base_match = re.search(r"(/home/[\w./-]+)", prompt)
+                base_dir = base_match.group(1) if base_match else ""
+                return await tool_write_multiple_files(reviewed, base_dir=base_dir)
+        except Exception:
+            pass
+    # Fallback: extrair arquivos com regex
+    import re
+    files = {}
+    for fm in re.finditer(r'"([^"]+\.[\w]+)":\s*"((?:[^"\\]|\\.)*?)"', resp):
+        path = fm.group(1)
+        content = fm.group(2).replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '"')
+        files[path] = content
+    if files:
+        base_match = re.search(r"(/home/[\w./-]+)", prompt)
+        base_dir = base_match.group(1) if base_match else ""
+        return await tool_write_multiple_files(files, base_dir=base_dir)
+    if path:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(resp)
+        return f"written: {path}"
+    return resp
+
+async def tool_review_code(code: str, language: str = "python") -> str:
+    import urllib.request, json
+    ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+    prompt = (
+        f"Revise o seguinte código {language} e retorne APENAS o código corrigido/melhorado. "
+        f"Não inclua explicações, markdown, code fences ou texto adicional. "
+        f"Retorne somente o código puro:\n\n{code[:6000]}"
+    )
+    data = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
+    req = urllib.request.Request(f"{ollama_url}/api/generate", data=data, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=600) as r:
+        return json.loads(r.read())["response"]
+
 async def tool_summarize(text: str, bullets: int = 3) -> str:
     import urllib.request, json
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    model = os.environ.get("OLLAMA_MODEL", "mistral-nemo")
+    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
     prompt = f"Resuma em {bullets} bullet points o seguinte texto:\n\n{text[:4000]}"
     data = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
     req = urllib.request.Request(f"{ollama_url}/api/generate", data=data, headers={"Content-Type": "application/json"})
@@ -262,6 +346,9 @@ TOOLS = {
     "list_dir": tool_list_dir,
     "read_file": tool_read_file,
     "summarize": tool_summarize,
+    "review_code": tool_review_code,
+    "generate_code": tool_generate_code,
+    "write_multiple_files": tool_write_multiple_files,
     "extract_csv": tool_extract_csv,
     "write_csv": tool_write_csv,
 }
@@ -350,12 +437,19 @@ def plan(prompt: str, tools=None, allowed_override=None) -> List[Dict[str, Any]]
         forced = "context7"
     elif "exa" in low or "tavily" in low or "busca" in low or "search" in low:
         forced = "tavily_search"
+    # Detectar "crie/gere/implemente" → generate_code
+    if any(kw in low for kw in ["crie", "gere", "implemente", "criar", "gerar"]):
+        import re
+        path_match = re.search(r"(/home/[\w./-]+)", prompt)
+        path = path_match.group(1) if path_match else "/home/thiago/Documents/output"
+        desc = prompt
+        return [{"id": 1, "tool": "generate_code", "args": {"prompt": desc, "path": path}, "deps": []}]
     if forced and forced in TOOLS:
         return [{"id": 1, "tool": forced, "args": {"cmd": prompt, "query": prompt, "command": prompt}, "deps": []}]
     # Chama Ollama local...
     import urllib.request
     ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-    model = os.environ.get("OLLAMA_MODEL", "mistral-nemo")
+    model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
     tool_list = ", ".join(TOOLS.keys())
     system = ("""Voce é um planejador de tarefas. Dado um prompt, você deve gerar um plano de execução em formato JSON. 
         Antes de gerar o plano, você deve analisar o prompt e decidir quais ferramentas são necessárias para executar as tarefas.
